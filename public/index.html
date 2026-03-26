@@ -13,7 +13,11 @@
 <body>
   <div class="container">
     <div class="topo">
-      <span class="tag">Análise com IA</span>
+      <div class="topo-header">
+        <span class="tag">Análise com IA</span>
+        <button id="toggleTheme" class="theme-btn">🌙</button>
+      </div>
+
       <h1>DOCE IMPACTO D.I.A</h1>
       <p class="subtitle">
         Detector inteligente para análise visual de produtos usando câmera e inteligência artificial.
@@ -23,16 +27,27 @@
     <div class="camera-box">
       <video id="video" autoplay playsinline></video>
       <canvas id="canvas" style="display:none;"></canvas>
-      <div class="scan-line"></div>
+      <div class="scan-line" id="scanLine"></div>
     </div>
 
     <div class="buttons">
       <button id="openCamera">Abrir câmera</button>
+      <button id="closeCamera">Desligar câmera</button>
       <button id="analyze">Analisar</button>
     </div>
 
     <div id="status">Aguardando...</div>
     <div id="details"></div>
+
+    <div class="history-box">
+      <div class="history-header">
+        <h2>Histórico de Análises</h2>
+        <button id="clearHistory" class="small-btn">Limpar</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <p class="empty-history">Nenhuma análise realizada ainda.</p>
+      </div>
+    </div>
   </div>
 </body>
 </html>

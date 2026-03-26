@@ -2,45 +2,57 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const statusBox = document.getElementById("status");
 const detailsBox = document.getElementById("details");
+
 const openCameraBtn = document.getElementById("openCamera");
+const closeCameraBtn = document.getElementById("closeCamera");
 const analyzeBtn = document.getElementById("analyze");
+const autoBtn = document.getElementById("autoAnalyze");
+const themeBtn = document.getElementById("toggleTheme");
+const clearBtn = document.getElementById("clearHistory");
+
 const cameraBox = document.querySelector(".camera-box");
 
 let model;
+let stream = null;
 let isAnalyzing = false;
+let autoMode = false;
+
+let ultimaClasse = null;
+
 const MODEL_URL = "./model/";
 
+
+// ==================== LOAD MODEL ====================
 async function loadModel() {
   try {
     statusBox.textContent = "Carregando IA...";
-    detailsBox.textContent = "Inicializando modelo do Teachable Machine.";
+    detailsBox.textContent = "Inicializando modelo...";
 
     const modelURL = MODEL_URL + "model.json";
     const metadataURL = MODEL_URL + "metadata.json";
 
-    console.log("Carregando:", modelURL, metadataURL);
-    console.log("window.tmImage:", window.tmImage);
-    console.log("window.tf:", window.tf);
-
     if (!window.tmImage) {
-      throw new Error("tmImage não foi carregado. Verifique a CSP, os scripts CDN e o cache do navegador.");
+      throw new Error("tmImage não carregado.");
     }
 
     model = await window.tmImage.load(modelURL, metadataURL);
 
-    console.log("Modelo carregado:", model);
-    statusBox.textContent = "IA carregada com sucesso.";
-    detailsBox.textContent = "Pronta para análise em tempo real.";
+    statusBox.textContent = "IA pronta";
+    detailsBox.textContent = "Abra a câmera para começar.";
   } catch (error) {
-    console.error("Erro ao carregar modelo:", error);
-    statusBox.textContent = "Erro ao carregar modelo.";
+    console.error(error);
+    statusBox.textContent = "Erro ao carregar IA";
     detailsBox.textContent = error.message;
   }
 }
 
+
+// ==================== CAMERA ====================
 async function openCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    if (stream) return;
+
+    stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "environment" },
       audio: false
     });
@@ -48,37 +60,48 @@ async function openCamera() {
     video.srcObject = stream;
     await video.play();
 
-    statusBox.textContent = "Câmera aberta.";
-    detailsBox.textContent = "Posicione o doce na frente da câmera.";
+    statusBox.textContent = "Câmera ativa";
+    detailsBox.textContent = "Posicione o doce.";
   } catch (error) {
-    console.error("Erro ao acessar câmera:", error);
-    statusBox.textContent = "Erro ao acessar câmera.";
-    detailsBox.textContent = "Verifique a permissão da câmera no navegador.";
+    console.error(error);
+    statusBox.textContent = "Erro na câmera";
+    detailsBox.textContent = "Permissão negada ou indisponível.";
   }
 }
 
+function closeCamera() {
+  if (!stream) return;
+
+  stream.getTracks().forEach(track => track.stop());
+  video.srcObject = null;
+  stream = null;
+
+  stopAnalysis();
+
+  statusBox.textContent = "Câmera desligada";
+  detailsBox.textContent = "Abra novamente para usar.";
+}
+
+
+// ==================== ANALYSIS ====================
 function updateStatusStyle(className) {
   const name = className.toLowerCase();
 
-  if (name.includes("boa") || name.includes("bom") || name.includes("aprovado")) {
+  if (name.includes("bom") || name.includes("aprovado")) {
     statusBox.style.background = "#d4edda";
     statusBox.style.color = "#155724";
-    statusBox.style.border = "1px solid #b7dfc6";
-  } else if (name.includes("estragada") || name.includes("estragado") || name.includes("ruim") || name.includes("reprovado")) {
+  } else if (name.includes("ruim") || name.includes("reprovado")) {
     statusBox.style.background = "#f8d7da";
     statusBox.style.color = "#721c24";
-    statusBox.style.border = "1px solid #efb8bf";
   } else {
     statusBox.style.background = "#fff3cd";
     statusBox.style.color = "#856404";
-    statusBox.style.border = "1px solid #f1df9b";
   }
 }
 
 function resetStatusStyle() {
-  statusBox.style.background = "linear-gradient(135deg, #f8fafc, #eef2ff)";
-  statusBox.style.color = "#111827";
-  statusBox.style.border = "1px solid rgba(99, 102, 241, 0.12)";
+  statusBox.style.background = "";
+  statusBox.style.color = "";
 }
 
 async function loopAnalyze() {
@@ -87,30 +110,18 @@ async function loopAnalyze() {
     return;
   }
 
-  if (!model) {
-    statusBox.textContent = "A IA não foi carregada.";
-    detailsBox.textContent = "O modelo precisa carregar antes da análise.";
-    isAnalyzing = false;
-    analyzeBtn.textContent = "Analisar";
-    cameraBox.classList.remove("scanning");
-    return;
-  }
-
-  if (!video.videoWidth || !video.videoHeight) {
-    statusBox.textContent = "Abra a câmera primeiro.";
-    detailsBox.textContent = "Sem imagem disponível para análise.";
-    isAnalyzing = false;
-    analyzeBtn.textContent = "Analisar";
-    cameraBox.classList.remove("scanning");
+  if (!model || !video.videoWidth) {
+    stopAnalysis();
     return;
   }
 
   cameraBox.classList.add("scanning");
+
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(video, 0, 0);
 
   try {
     const predictions = await model.predict(canvas);
@@ -120,49 +131,156 @@ async function loopAnalyze() {
     const confidence = (best.probability * 100).toFixed(1);
 
     statusBox.textContent = `Resultado: ${best.className}`;
-    detailsBox.textContent = `Confiança: ${confidence}% | Atualização em tempo real`;
+
     updateStatusStyle(best.className);
+
+    salvarHistorico(best.className, confidence);
+
   } catch (error) {
-    console.error("Erro na análise:", error);
-    statusBox.textContent = "Erro na análise.";
-    detailsBox.textContent = "Ocorreu uma falha ao processar a imagem.";
-    resetStatusStyle();
+    console.error(error);
+    statusBox.textContent = "Erro na análise";
   }
 
-  setTimeout(loopAnalyze, 500);
+  if (isAnalyzing) {
+    setTimeout(loopAnalyze, autoMode ? 1500 : 500);
+  }
 }
 
 function toggleAnalysis() {
   if (isAnalyzing) {
-    isAnalyzing = false;
-    analyzeBtn.textContent = "Analisar";
-    statusBox.textContent = "Análise pausada.";
-    detailsBox.textContent = "Clique em analisar para retomar.";
-    resetStatusStyle();
-    cameraBox.classList.remove("scanning");
+    stopAnalysis();
     return;
   }
 
-  if (!model) {
-    statusBox.textContent = "A IA não foi carregada.";
-    detailsBox.textContent = "Aguarde o carregamento do modelo.";
-    return;
-  }
-
-  if (!video.videoWidth || !video.videoHeight) {
-    statusBox.textContent = "Abra a câmera primeiro.";
-    detailsBox.textContent = "Sem câmera, sem análise.";
+  if (!model || !stream) {
+    statusBox.textContent = "Abra câmera e carregue IA";
     return;
   }
 
   isAnalyzing = true;
-  analyzeBtn.textContent = "Parar análise";
-  statusBox.textContent = "Analisando em tempo real...";
-  detailsBox.textContent = "Processando imagem continuamente...";
+  analyzeBtn.textContent = "Parar";
   loopAnalyze();
 }
 
-openCameraBtn.addEventListener("click", openCamera);
-analyzeBtn.addEventListener("click", toggleAnalysis);
+function stopAnalysis() {
+  isAnalyzing = false;
+  analyzeBtn.textContent = "Analisar";
+  cameraBox.classList.remove("scanning");
+  resetStatusStyle();
 
+  ultimaClasse = null;
+}
+
+
+// ==================== AUTO MODE ====================
+if (autoBtn) {
+  autoBtn.addEventListener("click", () => {
+    autoMode = !autoMode;
+    autoBtn.textContent = autoMode ? "Auto: ON" : "Auto: OFF";
+
+    if (autoMode && !isAnalyzing) {
+      toggleAnalysis();
+    }
+
+    if (!autoMode && isAnalyzing) {
+      stopAnalysis();
+    }
+  });
+}
+
+
+// ==================== HISTORY ====================
+function salvarHistorico(classe) {
+
+  // só salva se mudar de classe
+  if (classe === ultimaClasse) return;
+
+  ultimaClasse = classe;
+
+  const historico = JSON.parse(localStorage.getItem("historico")) || [];
+
+  historico.unshift({
+    classe,
+    data: new Date().toLocaleString("pt-BR")
+  });
+
+  if (historico.length > 20) historico.pop();
+
+  localStorage.setItem("historico", JSON.stringify(historico));
+  renderHistorico();
+}
+
+function renderHistorico() {
+  const lista = document.getElementById("historyList");
+  const historico = JSON.parse(localStorage.getItem("historico")) || [];
+
+  if (!lista) return;
+
+  if (!historico.length) {
+    lista.innerHTML = "<p>Nenhuma análise ainda</p>";
+    return;
+  }
+
+  lista.innerHTML = historico.map(item => {
+
+  let classeCor = "";
+
+  const nome = item.classe.toLowerCase();
+
+  if (nome.includes("bom") || nome.includes("aprovado")) {
+    classeCor = "good";
+  } else if (nome.includes("ruim") || nome.includes("reprovado")) {
+    classeCor = "bad";
+  } else {
+    classeCor = "neutral";
+  }
+
+  return `
+    <div class="history-item ${classeCor}">
+      <strong>${item.classe}</strong><br>
+
+      <small>${item.data}</small>
+    </div>
+  `;
+}).join("");}
+
+
+// BOTÃO LIMPAR
+if (clearBtn) {
+  clearBtn.addEventListener("click", () => {
+    localStorage.removeItem("historico");
+    renderHistorico();
+  });
+}
+
+
+// ==================== THEME ====================
+function loadTheme() {
+  if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark");
+    if (themeBtn) themeBtn.textContent = "☀️";
+  }
+}
+
+if (themeBtn) {
+  themeBtn.addEventListener("click", () => {
+    document.body.classList.toggle("dark");
+
+    const isDark = document.body.classList.contains("dark");
+
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    themeBtn.textContent = isDark ? "☀️" : "🌙";
+  });
+}
+
+
+// ==================== EVENTS ====================
+if (openCameraBtn) openCameraBtn.addEventListener("click", openCamera);
+if (closeCameraBtn) closeCameraBtn.addEventListener("click", closeCamera);
+if (analyzeBtn) analyzeBtn.addEventListener("click", toggleAnalysis);
+
+
+// ==================== INIT ====================
 loadModel();
+loadTheme();
+renderHistorico();
