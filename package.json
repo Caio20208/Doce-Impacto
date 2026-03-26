@@ -1,0 +1,12 @@
+{
+  "name": "doce-impacto",
+  "version": "1.0.0",
+  "description": "Detector com IA para análise visual de doces",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
