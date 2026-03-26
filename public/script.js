@@ -87,10 +87,10 @@ function closeCamera() {
 function updateStatusStyle(className) {
   const name = className.toLowerCase();
 
-  if (name.includes("bom") || name.includes("aprovado")) {
+  if (name.includes("bom") || name.includes("limpo")) {
     statusBox.style.background = "#d4edda";
     statusBox.style.color = "#155724";
-  } else if (name.includes("ruim") || name.includes("reprovado")) {
+  } else if (name.includes("ruim") || name.includes("contaminado")) {
     statusBox.style.background = "#f8d7da";
     statusBox.style.color = "#721c24";
   } else {
