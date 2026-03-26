@@ -227,9 +227,9 @@ function renderHistorico() {
 
   const nome = item.classe.toLowerCase();
 
-  if (nome.includes("bom") || nome.includes("aprovado")) {
+  if (nome.includes("bom") || nome.includes("limpo")) {
     classeCor = "good";
-  } else if (nome.includes("ruim") || nome.includes("reprovado")) {
+  } else if (nome.includes("ruim") || nome.includes("contaminado")) {
     classeCor = "bad";
   } else {
     classeCor = "neutral";
